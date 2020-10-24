@@ -2,35 +2,22 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/examples/util"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-//	"github.com/google/gopacket/tcpassembly"
-//	"github.com/google/gopacket/tcpassembly/tcpreader"
-	"strings"
-	"time"
+//	"encoding/json"
 )
 
-//type httpStreamFactory struct{}
-
-// httpStream will handle the actual decoding of http requests.
-//type httpStream struct {
-//	net, transport gopacket.Flow
-//	r              tcpreader.ReaderStream
-//}
-
-//func (h *httpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream {
-//	hstream := &httpStream{
-//		net:       net,
-//		transport: transport,
-//		r:         tcpreader.NewReaderStream(),
-//	}
-//	return &hstream.r
-//}
 
 func main() {
 	defer util.Run()()
+	filePath := "Test"
+	f, err := os.Create(filePath)
+        if err != nil {
+                 panic(err)
+        }
 
 	handle, err := pcap.OpenLive("eth0", 9001, true, pcap.BlockForever)
 	if err != nil {
@@ -43,40 +30,36 @@ func main() {
 	}
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	var reqs strings.Builder
-	var sep = ";"
+	max_size := 10
+	packets_list := make([][]byte,max_size) 
+	current_packet := 0
 
 	for overlayPacket := range packetSource.Packets() {
 		vxlanLayer := overlayPacket.Layer(layers.LayerTypeVXLAN)
 		if vxlanLayer != nil {
 			vxlanPacket, _ := vxlanLayer.(*layers.VXLAN)
-			packet := gopacket.NewPacket(vxlanPacket.LayerPayload(), layers.LayerTypeEthernet, gopacket.Default)
+			
+			fmt.Println(current_packet)
+			packets_list[current_packet] = vxlanPacket.LayerPayload()
+			current_packet += 1
+			fmt.Println(vxlanPacket.LayerPayload())
+			if current_packet == max_size {
+				newSlice := make([][]byte, max_size)
+				copy(newSlice, packets_list)
+				fmt.Println(current_packet)
+				current_packet = 0
+				go write_file(newSlice, f)
 
-			applicationLayer := packet.ApplicationLayer()
-			if applicationLayer != nil {
-				if strings.Contains(string(applicationLayer.Payload()), "HTTP"){
-					now := time.Now()
-					nsec := now.UnixNano()
-					netFlow := packet.NetworkLayer().NetworkFlow()
-					reqs.WriteString(netFlow)
-//					src,dst := netFlow.Endpoints()
-//					fmt.Printf("[SRC HOST IP: %s] [DEST HOST IP: %s]\n", src, dst)
-//					fmt.Printf("%s\n", applicationLayer.Payload())
-					fmt.Println(nsec)
-				}
+
 			}
-//			fmt.Println(packet.Dump())
-//			assembler := tcpassembly.NewAssembler(streamPool)
-//			go process_packet(packet, assembler)
 		}
 	}
+	defer f.Close()
 }
 
-//func process_packet(packet gopacket.Packet, assembler *tcpassembly.Assembler) {
-//	tcpLayer := packet.Layer(layers.LayerTypeTCP)
-//	tcp, _ := tcpLayer.(*layers.TCP)
-//	if tcp != nil {
-//		assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
-//	}
-//}
+func write_file(packets_list [][]byte, f *os.File) {
+	for _, value := range packets_list {
+		fmt.Fprintln(f, value)  
+	}
+}
 
