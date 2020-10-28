@@ -13,11 +13,6 @@ import (
 
 func main() {
 	defer util.Run()()
-	filePath := "Test"
-	f, err := os.Create(filePath)
-        if err != nil {
-                 panic(err)
-        }
 
 	handle, err := pcap.OpenLive("eth0", 9001, true, pcap.BlockForever)
 	if err != nil {
@@ -30,36 +25,36 @@ func main() {
 	}
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	max_size := 10
-	packets_list := make([][]byte,max_size) 
-	current_packet := 0
+	packetsList := make(chan []byte, 22)
+	filePath := "Test"
+	go writeFile(packetsList, filePath)
 
 	for overlayPacket := range packetSource.Packets() {
 		vxlanLayer := overlayPacket.Layer(layers.LayerTypeVXLAN)
 		if vxlanLayer != nil {
 			vxlanPacket, _ := vxlanLayer.(*layers.VXLAN)
-			
-			fmt.Println(current_packet)
-			packets_list[current_packet] = vxlanPacket.LayerPayload()
-			current_packet += 1
+			packetsList <- vxlanPacket.LayerPayload()
 			fmt.Println(vxlanPacket.LayerPayload())
-			if current_packet == max_size {
-				newSlice := make([][]byte, max_size)
-				copy(newSlice, packets_list)
-				fmt.Println(current_packet)
-				current_packet = 0
-				go write_file(newSlice, f)
 
+		}
+	}
+}
 
+func writeFile(packetsList chan []byte, filePath string) {
+	numberPackets := 20
+	f, err := os.Create(filePath)
+	if err != nil {
+		panic(err)
+	}
+
+	for {
+		if len(packetsList) >= numberPackets {
+			for i := 0; i < numberPackets; i++ {
+				value := <-packetsList
+				fmt.Fprintln(f, value)
 			}
 		}
 	}
 	defer f.Close()
-}
-
-func write_file(packets_list [][]byte, f *os.File) {
-	for _, value := range packets_list {
-		fmt.Fprintln(f, value)  
-	}
 }
 
