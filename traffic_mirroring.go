@@ -6,6 +6,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"io"
+	"log"
 	"os"
 )
 
@@ -32,8 +33,8 @@ func main() {
 
 	defer f.Close()
 
-	go writeFile(packetsList, f)
-	networkListener(packetSource, packetsList)
+	go WriteFile(packetsList, f)
+	NetworkListener(packetSource.Packets(), packetsList)
 }
 
 
@@ -42,24 +43,33 @@ func check(e error) {
 		panic(e)
 	}
 }
-func networkListener(packetSource *gopacket.PacketSource, packetsList chan []byte) {
-	for overlayPacket := range packetSource.Packets() {
+
+func NetworkListener(source chan gopacket.Packet, dest chan []byte) {
+	for overlayPacket := range source {
 		vxlanLayer := overlayPacket.Layer(layers.LayerTypeVXLAN)
-		if vxlanLayer != nil {
-			vxlanPacket, _ := vxlanLayer.(*layers.VXLAN)
-			packetsList <- vxlanPacket.LayerPayload()
+		if vxlanLayer == nil {
+			log.Printf("Unable to get VXLAN Layer for packet with metadata (%+v)\n", overlayPacket.Metadata())
 		}
+		vxlanPacket, ok := vxlanLayer.(*layers.VXLAN)
+		if !ok {
+			log.Printf("Unable to cast packet (%+v) to vxlan layer", overlayPacket.Metadata())
+		}
+		dest <- vxlanPacket.LayerPayload()
 	}
 }
 
-func writeFile(packetsList chan []byte, file io.Writer) {
+func WriteFile(packetsList chan []byte, file io.Writer) {
+	// TODO: on the program exit, you need to write the remain packets inside the channel.
 	batchSize := 20
 
 	for {
 		if len(packetsList) >= batchSize {
 			for i := 0; i < batchSize; i++ {
 				value := <-packetsList
-				_, err := file.Write(value)
+				n, err := file.Write(value)
+				if len(value) != n {
+					// nao escreveu.
+				}
 				check(err)
 			}
 		}
