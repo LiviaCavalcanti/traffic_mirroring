@@ -1,13 +1,12 @@
 package main
 
 import (
-	"fmt"
-	"os"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/examples/util"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-//	"encoding/json"
+	"io"
+	"os"
 )
 
 
@@ -26,12 +25,23 @@ func main() {
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	packetsList := make(chan []byte, 22)
-	filePath := "Test"
-	go writeFile(packetsList, filePath)
+	filePath := "dump_file"
 
+	f, err := os.Create(filePath)
+	check(err)
+
+	defer f.Close()
+
+	go writeFile(packetsList, f)
 	networkListener(packetSource, packetsList)
 }
 
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
 func networkListener(packetSource *gopacket.PacketSource, packetsList chan []byte) {
 	for overlayPacket := range packetSource.Packets() {
 		vxlanLayer := overlayPacket.Layer(layers.LayerTypeVXLAN)
@@ -42,21 +52,17 @@ func networkListener(packetSource *gopacket.PacketSource, packetsList chan []byt
 	}
 }
 
-func writeFile(packetsList chan []byte, filePath string) {
+func writeFile(packetsList chan []byte, file io.Writer) {
 	batchSize := 20
-	f, err := os.Create(filePath)
-	if err != nil {
-		panic(err)
-	}
 
 	for {
 		if len(packetsList) >= batchSize {
 			for i := 0; i < batchSize; i++ {
 				value := <-packetsList
-				fmt.Fprintln(f, value)
+				_, err := file.Write(value)
+				check(err)
 			}
 		}
 	}
-	defer f.Close()
 }
 
