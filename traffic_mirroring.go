@@ -29,6 +29,10 @@ func main() {
 	filePath := "Test"
 	go writeFile(packetsList, filePath)
 
+	networkListener(packetSource, packetsList)
+}
+
+func networkListener(packetSource *gopacket.PacketSource, packetsList chan []byte) {
 	for overlayPacket := range packetSource.Packets() {
 		vxlanLayer := overlayPacket.Layer(layers.LayerTypeVXLAN)
 		if vxlanLayer != nil {
