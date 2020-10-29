@@ -38,22 +38,20 @@ func networkListener(packetSource *gopacket.PacketSource, packetsList chan []byt
 		if vxlanLayer != nil {
 			vxlanPacket, _ := vxlanLayer.(*layers.VXLAN)
 			packetsList <- vxlanPacket.LayerPayload()
-			fmt.Println(vxlanPacket.LayerPayload())
-
 		}
 	}
 }
 
 func writeFile(packetsList chan []byte, filePath string) {
-	numberPackets := 20
+	batchSize := 20
 	f, err := os.Create(filePath)
 	if err != nil {
 		panic(err)
 	}
 
 	for {
-		if len(packetsList) >= numberPackets {
-			for i := 0; i < numberPackets; i++ {
+		if len(packetsList) >= batchSize {
+			for i := 0; i < batchSize; i++ {
 				value := <-packetsList
 				fmt.Fprintln(f, value)
 			}
