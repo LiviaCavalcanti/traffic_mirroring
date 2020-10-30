@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 )
 
 
@@ -31,8 +32,11 @@ func main() {
 
 	f, err := os.Create(filePath)
 	check(err)
-
 	defer f.Close()
+
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, os.Interrupt)
+	go handleSignal(sigChan, packetsList, filePath, os.Exit)
 
 	go WriteFile(packetsList, f, batchSize)
 	NetworkListener(packetSource.Packets(), packetsList)
@@ -43,6 +47,13 @@ func check(e error) {
 	if e != nil {
 		panic(e)
 	}
+}
+
+func handleSignal(sigChan chan os.Signal, packetsList chan []byte, file io.Writer, end func(int)) {
+	<-sigChan
+	exitCode := 130
+	WriteFile(packetsList, file, len(packetsList))
+	end(exitCode)
 }
 
 func NetworkListener(source chan gopacket.Packet, dest chan []byte) {
@@ -61,7 +72,7 @@ func NetworkListener(source chan gopacket.Packet, dest chan []byte) {
 
 func WriteFile(packetsList chan []byte, file io.Writer, batchSize int) {
 	// TODO: on the program exit, you need to write the remain packets inside the channel.
-	
+
 	for {
 		if len(packetsList) >= batchSize {
 			for i := 0; i < batchSize; i++ {
