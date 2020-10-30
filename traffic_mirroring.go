@@ -36,7 +36,7 @@ func main() {
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, os.Interrupt)
-	go handleSignal(sigChan, packetsList, filePath, os.Exit)
+	go handleSignal(sigChan, packetsList, f, os.Exit)
 
 	go WriteFile(packetsList, f, batchSize)
 	NetworkListener(packetSource.Packets(), packetsList)
