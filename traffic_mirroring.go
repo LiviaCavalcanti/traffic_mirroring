@@ -59,19 +59,19 @@ func NetworkListener(source chan gopacket.Packet, dest chan []byte) {
 	}
 }
 
-func WriteFile(packetsList chan []byte, file io.Writer) {
+func WriteFile(packetsList chan []byte, file io.Writer, batchSize int) {
 	// TODO: on the program exit, you need to write the remain packets inside the channel.
-	batchSize := 20
-
+	
 	for {
 		if len(packetsList) >= batchSize {
 			for i := 0; i < batchSize; i++ {
 				value := <-packetsList
 				n, err := file.Write(value)
 				if len(value) != n {
-					// nao escreveu.
+					log.Printf("Error writing packets to file. Number of bytes expected to be written: %v; Actual number of bytes written: %v", len(value), n)
+					panic(err)
 				}
-				check(err)
+
 			}
 		}
 	}
