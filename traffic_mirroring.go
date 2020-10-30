@@ -27,13 +27,14 @@ func main() {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	packetsList := make(chan []byte, 22)
 	filePath := "dump_file"
+	batchSize := 20
 
 	f, err := os.Create(filePath)
 	check(err)
 
 	defer f.Close()
 
-	go WriteFile(packetsList, f)
+	go WriteFile(packetsList, f, batchSize)
 	NetworkListener(packetSource.Packets(), packetsList)
 }
 
