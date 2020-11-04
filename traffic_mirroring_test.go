@@ -51,16 +51,17 @@ var testSimpleTCPPacket = []byte{
 
 
 func TestNetworkListener(t *testing.T) {
-	packet := gopacket.NewPacket(testSimpleTCPPacket, layers.LayerTypeVXLAN, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-	source := make(chan gopacket.Packet, 100)
-	dest := make(chan []byte, 22)
-	nPackets := 2
-	go NetworkListener(source, dest)
-	for i := 0; i < nPackets; i++ {
-		source <- packet
+	nPackets:= 10 // test file length is 10 packets
+	handle, err := pcap.OpenOffline("vxlan.pcap")
+	if err != nil {
+		log.Fatalln(err)
 	}
+	source := gopacket.NewPacketSource(handle, handle.LinkType())
+	dest := make(chan []byte, 22)
+	go NetworkListener(source, dest)
+
 	time.Sleep(2 * time.Second)
-	close(source)
+
 	close(dest)
 	if len(dest) != nPackets {
 		t.Errorf("Error on network listener: Packets were not properly captured.\n Number of packets expected: %v; Number of Packets in destination channel: %v\n", nPackets, len(dest))
