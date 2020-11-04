@@ -1,6 +1,7 @@
 package main
 
 import (
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/examples/util"
 	"github.com/google/gopacket/layers"
@@ -60,42 +61,50 @@ func check(e error) {
 	}
 }
 
-func handleSignal(sigChan chan os.Signal, packetsList chan []byte, file io.Writer, end func(int)) {
+func handleSignal(sigChan chan os.Signal, packetsList chan []byte, quit chan bool, end func(int)) {
 	<-sigChan
-	exitCode := 130
-	WriteFile(packetsList, file, len(packetsList))
+	exitCode := 0
+	close(packetsList)
+	quit <- true
 	end(exitCode)
 }
 
-func NetworkListener(source chan gopacket.Packet, dest chan []byte) {
-	for overlayPacket := range source {
+func NetworkListener(source gopacket.PacketSource, dest chan []byte) {
+	for overlayPacket := range source.Packets() {
 		vxlanLayer := overlayPacket.Layer(layers.LayerTypeVXLAN)
-		if vxlanLayer == nil {
-			log.Printf("Unable to get VXLAN Layer for packet with metadata (%+v)\n", overlayPacket.Metadata())
-		}
-		vxlanPacket, ok := vxlanLayer.(*layers.VXLAN)
-		if !ok {
-			log.Printf("Unable to cast packet (%+v) to vxlan layer", overlayPacket.Metadata())
-		}
-		dest <- vxlanPacket.LayerPayload()
-	}
-}
-
-func WriteFile(packetsList chan []byte, file io.Writer, batchSize int) {
-	// TODO: on the program exit, you need to write the remain packets inside the channel.
-
-	for {
-		if len(packetsList) >= batchSize {
-			for i := 0; i < batchSize; i++ {
-				value := <-packetsList
-				n, err := file.Write(value)
-				if len(value) != n {
-					log.Printf("Error writing packets to file. Number of bytes expected to be written: %v; Actual number of bytes written: %v", len(value), n)
-					panic(err)
-				}
-
+		if vxlanLayer != nil {
+			vxlanPacket, ok := vxlanLayer.(*layers.VXLAN)
+			if !ok {
+				log.Printf("Unable to cast packet to vxlan layer")
+			} else {
+				dest <- vxlanPacket.LayerPayload()
 			}
 		}
 	}
 }
 
+func WriteFile(packetsList chan []byte, file io.Writer, quit chan bool, batchSize int) {
+
+	for {
+		select {
+		case <- quit:
+			for value := range packetsList {
+				_, err := file.Write(value)
+				if err != nil {
+					panic(err)
+				}
+			}
+		default:
+			if len(packetsList) >= batchSize {
+				for i := 0; i < batchSize; i++ {
+					value := <-packetsList
+					_, err := file.Write(value)
+					if err != nil {
+						panic(err)
+					}
+				}
+			}
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+}
