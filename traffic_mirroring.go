@@ -10,7 +10,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	//"strings"
 	"time"
 )
 func main() {
@@ -37,20 +36,10 @@ func main() {
 	sigChan := make(chan os.Signal)
 	quit := make(chan bool)
 	signal.Notify(sigChan, os.Interrupt)
-	go handleSignal(sigChan, packetsList, quit, os.Exit)
-	go WriteFile(packetsList, f, quit, batchSize)
 
-	for overlayPacket := range packetSource.Packets() {
-		vxlanLayer := overlayPacket.Layer(layers.LayerTypeVXLAN)
-		if vxlanLayer == nil {
-			log.Printf("Unable to get VXLAN Layer for packet with metadata (%+v)\n", overlayPacket.Metadata())
-		}
-		vxlanPacket, ok := vxlanLayer.(*layers.VXLAN)
-		if !ok {
-			log.Printf("Unable to cast packet (%+v) to vxlan layer", overlayPacket.Metadata())
-		}
-		packetsList <- vxlanPacket.LayerPayload()
-	}
+	go WriteFile(packetsList, f, quit, batchSize)
+	go NetworkListener(packetSource, packetsList)
+	handleSignal(sigChan, packetsList, quit, os.Exit)
 
 }
 
