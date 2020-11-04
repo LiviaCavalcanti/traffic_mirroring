@@ -72,7 +72,7 @@ func TestNetworkListener(t *testing.T) {
 func TestWriteFile(t *testing.T) {
 	nPackets := 16
 	batchSize := 3
-	filePath := "test"
+	filePath := "test_write"
 	target := make(chan []byte, nPackets)
 	quitController := make(chan bool)
 	file, _ := os.Create(filePath)
