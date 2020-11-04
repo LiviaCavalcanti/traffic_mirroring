@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"os"
 	"testing"
 	"time"
 )
@@ -48,6 +48,7 @@ var testSimpleTCPPacket = []byte{
 	0x0d, 0x0a,
 }
 
+
 func TestNetworkListener(t *testing.T) {
 	packet := gopacket.NewPacket(testSimpleTCPPacket, layers.LayerTypeVXLAN, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 	source := make(chan gopacket.Packet, 100)
@@ -63,7 +64,20 @@ func TestNetworkListener(t *testing.T) {
 	if len(dest) != nPackets {
 		t.Errorf("Error on network listener: Packets were not properly captured.\n Number of packets expected: %v; Number of Packets in destination channel: %v\n", nPackets, len(dest))
 	}
-	for payload := range dest {
-		fmt.Println(payload)
+
+}
+
+func TestWriteFile(t *testing.T) {
+	nPackets := 16
+	batchSize := 3
+	filePath := "test"
+	target := make(chan []byte, nPackets)
+	quitController := make(chan bool)
+	file, _ := os.Create(filePath)
+	for i := 0; i < nPackets; i++ {
+		target <- []byte{testSimpleTCPPacket[i]}
 	}
+	go WriteFile(target, file, quitController, batchSize)
+	quitController <- true
+
 }
