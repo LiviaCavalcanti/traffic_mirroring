@@ -58,7 +58,7 @@ func handleSignal(sigChan chan os.Signal, packetsList chan []byte, quit chan boo
 	end(exitCode)
 }
 
-func NetworkListener(source gopacket.PacketSource, dest chan []byte) {
+func NetworkListener(source *gopacket.PacketSource, dest chan []byte) {
 	for overlayPacket := range source.Packets() {
 		vxlanLayer := overlayPacket.Layer(layers.LayerTypeVXLAN)
 		if vxlanLayer != nil {
