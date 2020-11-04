@@ -83,6 +83,7 @@ func WriteFile(packetsList chan []byte, file io.Writer, quit chan bool, batchSiz
 					panic(err)
 				}
 			}
+			return
 		default:
 			if len(packetsList) >= batchSize {
 				for i := 0; i < batchSize; i++ {
