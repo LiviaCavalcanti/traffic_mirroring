@@ -75,10 +75,12 @@ func TestWriteFile(t *testing.T) {
 	target := make(chan []byte, nPackets)
 	quitController := make(chan bool)
 	file := bytes.NewBufferString("")
-	for i := 0; i < nPackets; i++ {
-		target <- []byte{testSimpleTCPPacket[i]}
-	}
+	target <- testSimpleTCPPacket
 	go WriteFile(target, file, quitController, batchSize)
 	quitController <- true
+
+	if string(testSimpleTCPPacket) != file.String() {
+			t.Errorf("Error on writing file: The written content is different of its source.\n Content expected: %v; Content gotten: %v\n", testSimpleTCPPacket, file)
+	}
 
 }
