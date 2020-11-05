@@ -53,8 +53,9 @@ func check(e error) {
 func handleSignal(sigChan chan os.Signal, packetsList chan []byte, quit chan bool, end func(int)) {
 	<-sigChan
 	exitCode := 0
-	close(packetsList)
 	quit <- true
+	close(packetsList)
+	close(quit)
 	end(exitCode)
 }
 
