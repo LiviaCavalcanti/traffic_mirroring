@@ -76,7 +76,7 @@ func TestWriteFile(t *testing.T) {
 	quitController := make(chan bool)
 	file := bytes.NewBufferString("")
 	target <- testSimpleTCPPacket
-	go WriteFile(target, file, quitController, batchSize)
+	go ChannelControl(target, file, quitController, batchSize)
 	quitController <- true
 
 	if string(testSimpleTCPPacket) != file.String() {

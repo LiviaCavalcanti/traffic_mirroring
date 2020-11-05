@@ -6,7 +6,7 @@ import (
 	"github.com/google/gopacket/examples/util"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"io"
+	"github.com/google/gopacket/pcapgo"
 	"log"
 	"os"
 	"os/signal"
@@ -26,18 +26,20 @@ func main() {
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	packetsList := make(chan []byte, 22)
-	filePath := "dump_file"
+	filePath := "dump_file.pcap"
 	batchSize := 20
 
 	f, err := os.Create(filePath)
 	check(err)
+	w := pcapgo.NewWriter(f)
+	w.WriteFileHeader(65535, layers.LinkTypeEthernet)
 	defer f.Close()
 
 	sigChan := make(chan os.Signal)
 	quit := make(chan bool)
 	signal.Notify(sigChan, os.Interrupt)
 
-	go WriteFile(packetsList, f, quit, batchSize)
+	go ChannelControl(packetsList, w, quit, batchSize)
 	go NetworkListener(packetSource, packetsList)
 	handleSignal(sigChan, packetsList, quit, os.Exit)
 
@@ -73,29 +75,29 @@ func NetworkListener(source *gopacket.PacketSource, dest chan []byte) {
 	}
 }
 
-func WriteFile(packetsList chan []byte, file io.Writer, quit chan bool, batchSize int) {
+func ChannelControl(packetsList chan []byte, file *pcapgo.Writer, quit chan bool, batchSize int) {
 
 	for {
 		select {
 		case <- quit:
-			for value := range packetsList {
-				_, err := file.Write(value)
-				if err != nil {
-					panic(err)
-				}
-			}
+			WriteFile(packetsList, file, len(packetsList))
 			return
 		default:
 			if len(packetsList) >= batchSize {
-				for i := 0; i < batchSize; i++ {
-					value := <-packetsList
-					_, err := file.Write(value)
-					if err != nil {
-						panic(err)
-					}
-				}
+				WriteFile(packetsList, file, batchSize)
 			}
 		}
 		time.Sleep(1 * time.Millisecond)
+	}
+}
+
+func WriteFile(packetsList chan []byte, file *pcapgo.Writer, batchSize int) {
+	for i := 0; i < batchSize; i++ {
+		packetPayload := <-packetsList
+		packet := gopacket.NewPacket(packetPayload, layers.LayerTypeEthernet, gopacket.Default)
+		err := file.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
+		if err != nil {
+			panic(err)
+		}
 	}
 }
