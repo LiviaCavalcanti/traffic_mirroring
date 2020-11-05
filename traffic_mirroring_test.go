@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
 	"log"
-	"os"
 	"testing"
 	"time"
 )
@@ -72,10 +72,9 @@ func TestNetworkListener(t *testing.T) {
 func TestWriteFile(t *testing.T) {
 	nPackets := 16
 	batchSize := 3
-	filePath := "test_write"
 	target := make(chan []byte, nPackets)
 	quitController := make(chan bool)
-	file, _ := os.Create(filePath)
+	file := bytes.NewBufferString("")
 	for i := 0; i < nPackets; i++ {
 		target <- []byte{testSimpleTCPPacket[i]}
 	}
