@@ -1,24 +1,19 @@
 package main
 
 import (
-	"fmt"
-	"os"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/examples/util"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-//	"encoding/json"
+	"io"
+	"log"
+	"os"
+	"os/signal"
+	"time"
 )
-
-
 func main() {
 	defer util.Run()()
-	filePath := "Test"
-	f, err := os.Create(filePath)
-        if err != nil {
-                 panic(err)
-        }
-
 	handle, err := pcap.OpenLive("eth0", 9001, true, pcap.BlockForever)
 	if err != nil {
 		panic(err)
@@ -30,36 +25,77 @@ func main() {
 	}
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	max_size := 10
-	packets_list := make([][]byte,max_size) 
-	current_packet := 0
+	packetsList := make(chan []byte, 22)
+	filePath := "dump_file"
+	batchSize := 20
 
-	for overlayPacket := range packetSource.Packets() {
+	f, err := os.Create(filePath)
+	check(err)
+	defer f.Close()
+
+	sigChan := make(chan os.Signal)
+	quit := make(chan bool)
+	signal.Notify(sigChan, os.Interrupt)
+
+	go WriteFile(packetsList, f, quit, batchSize)
+	go NetworkListener(packetSource, packetsList)
+	handleSignal(sigChan, packetsList, quit, os.Exit)
+
+}
+
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
+func handleSignal(sigChan chan os.Signal, packetsList chan []byte, quit chan bool, end func(int)) {
+	<-sigChan
+	exitCode := 0
+	quit <- true
+	close(packetsList)
+	close(quit)
+	end(exitCode)
+}
+
+func NetworkListener(source *gopacket.PacketSource, dest chan []byte) {
+	for overlayPacket := range source.Packets() {
 		vxlanLayer := overlayPacket.Layer(layers.LayerTypeVXLAN)
 		if vxlanLayer != nil {
-			vxlanPacket, _ := vxlanLayer.(*layers.VXLAN)
-			
-			fmt.Println(current_packet)
-			packets_list[current_packet] = vxlanPacket.LayerPayload()
-			current_packet += 1
-			fmt.Println(vxlanPacket.LayerPayload())
-			if current_packet == max_size {
-				newSlice := make([][]byte, max_size)
-				copy(newSlice, packets_list)
-				fmt.Println(current_packet)
-				current_packet = 0
-				go write_file(newSlice, f)
-
-
+			vxlanPacket, ok := vxlanLayer.(*layers.VXLAN)
+			if !ok {
+				log.Printf("Unable to cast packet to vxlan layer")
+			} else {
+				dest <- vxlanPacket.LayerPayload()
 			}
 		}
 	}
-	defer f.Close()
 }
 
-func write_file(packets_list [][]byte, f *os.File) {
-	for _, value := range packets_list {
-		fmt.Fprintln(f, value)  
+func WriteFile(packetsList chan []byte, file io.Writer, quit chan bool, batchSize int) {
+
+	for {
+		select {
+		case <- quit:
+			for value := range packetsList {
+				_, err := file.Write(value)
+				if err != nil {
+					panic(err)
+				}
+			}
+			return
+		default:
+			if len(packetsList) >= batchSize {
+				for i := 0; i < batchSize; i++ {
+					value := <-packetsList
+					_, err := file.Write(value)
+					if err != nil {
+						panic(err)
+					}
+				}
+			}
+		}
+		time.Sleep(1 * time.Millisecond)
 	}
 }
-
